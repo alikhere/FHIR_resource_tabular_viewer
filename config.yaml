@@ -1,0 +1,662 @@
+# FHIR Patient Search Application Configuration
+# Single unified configuration file for both backend and frontend
+
+# FHIR Server Configuration
+fhir:
+  base_url: "https://hapi.fhir.org/baseR4/"
+  timeout_seconds: 30
+  max_retries: 2
+  
+  # Resource Configuration Strategy
+  resource_discovery:
+    mode: "dynamic"  # Options: "dynamic", "static", "hybrid"
+    cache_duration_hours: 24  # Cache discovered resources for 24 hours
+    
+  # Core resources (always included if available)
+  core_resources:
+    - Patient
+    - Observation
+    - Condition
+    - Procedure
+    - MedicationRequest
+    - Encounter
+    - DiagnosticReport
+    - DocumentReference
+    - AllergyIntolerance
+    - Immunization
+    
+  # Optional/Extended resources (included if server supports them)
+  extended_resources:
+    - CarePlan
+    - Goal  
+    - ServiceRequest
+    - Appointment
+    - Coverage
+    - Device
+    - FamilyMemberHistory
+    - ImagingStudy
+    - Media
+    - Provenance
+    - QuestionnaireResponse
+    - RiskAssessment
+    - Specimen
+    - Supply
+    - Task
+    
+  # Resources to exclude (even if server supports them)
+  excluded_resources:
+    - Bundle
+    - CapabilityStatement
+    - OperationDefinition
+    - SearchParameter
+    - StructureDefinition
+    - ValueSet
+    - CodeSystem
+    - ConceptMap
+    
+  # Resource categories for UI organization
+  resource_categories:
+    clinical:
+      - Patient
+      - Observation  
+      - Condition
+      - Procedure
+      - AllergyIntolerance
+    administrative:
+      - Encounter
+      - Appointment
+      - Coverage
+      - CarePlan
+    diagnostic:
+      - DiagnosticReport
+      - ImagingStudy
+      - Specimen
+    workflow:
+      - Task
+      - ServiceRequest
+      - Goal
+
+# Backend API Configuration  
+backend:
+  host: "localhost"
+  port: 8000
+  cors_origins:
+    - "http://localhost:3000"
+    - "http://127.0.0.1:3000"
+  
+  # Cache Configuration
+  cache:
+    patient_cache_duration_minutes: 15
+    config_cache_duration_hours: 2
+    max_cache_entries: 200
+    background_prefetch: true
+  
+  # Search Configuration
+  search:
+    default_page_size: 50
+    max_page_size: 1000
+    enable_data_scoring: true
+    max_patients_to_score: 20
+
+  # Aggregate Dataset Configuration
+  aggregate:
+    enabled: false                    # TEMPORARILY DISABLED - causing issues
+    max_records: 200000              # Safety cap per dataset
+    page_count_hint: 100             # Hint for FHIR server _count parameter
+    max_build_time_seconds: 300      # Timeout for long aggregations
+    progress_enabled: true           # Enable progress endpoint
+    max_memory_mb: 512              # Memory limit for in-memory cache
+
+# Frontend Configuration
+frontend:
+  api_base_url: "http://localhost:8000"
+  title: "FHIR Patient Search"
+  
+  # UI Configuration
+  ui:
+    default_page_size: 50
+    max_search_results: 200
+    page_size_options: [25, 50, 100, 200]  # Available page size options
+    enable_export: true
+    enable_filters: true
+    aggregate_enabled: true             # Frontend feature flag for aggregate UI
+  
+  # Cache Configuration
+  cache:
+    request_cache_ttl_minutes: 5
+    max_cache_size: 100
+
+# Cache Backend Configuration (for aggregate datasets)
+cache:
+  backend: "memory"                   # "memory" or "redis" 
+  ttl_seconds: 1800                  # 30 minutes dataset lifetime
+  max_datasets_per_user: 10         # LRU limit per user
+  redis_url: "redis://localhost:6379"  # Redis connection if backend=redis
+
+# HTTP Fetching Configuration
+http:
+  fetch_concurrency: 3               # Max concurrent Bundle.next fetches
+  bundle_timeout_seconds: 30         # Individual Bundle request timeout
+  max_retries: 2                     # Retry failed Bundle fetches
+
+# Filter Definitions - 
+# This section defines what can be filtered without hardcoding in the application
+filter_definitions:
+  # Patient Demographics
+  - resource: "Patient"
+    element: "gender"
+    path: "gender"
+    display_path: "gender"
+    endpoint: "/Patient"
+    search_parameter: "gender"
+    description: "Filter by patient gender"
+    category: "Demographics"
+    subcategory: "Gender"
+    
+
+  # Clinical Notes filtering
+  - resource: "DocumentReference"
+    element: "note_type"
+    path: "type.coding[*].code"
+    display_path: "type.coding[*].display"
+    endpoint: "/DocumentReference"
+    search_parameter: "type"
+    category: "Clinical Documentation"
+    subcategory: "Note Types"
+    
+  - resource: "DocumentReference"
+    element: "note_author"
+    path: "author[*].display"
+    display_path: "author[*].display"
+    endpoint: "/DocumentReference"
+    search_parameter: "author"
+    category: "Clinical Documentation"
+    subcategory: "Authors"
+    
+  - resource: "DocumentReference" 
+    element: "note_specialty"
+    path: "author[*].practitionerRole.specialty[*].coding[*].code"
+    display_path: "author[*].practitionerRole.specialty[*].coding[*].display"
+    endpoint: "/DocumentReference"
+    search_parameter: "author.practitionerRole.specialty"
+    category: "Clinical Documentation"
+    subcategory: "Provider Specialties"
+    
+  # Diagnostic Reports filtering
+  - resource: "DiagnosticReport"
+    element: "report_category"
+    path: "category[*].coding[*].code"
+    display_path: "category[*].coding[*].display"
+    endpoint: "/DiagnosticReport"
+    search_parameter: "category"
+    patient_reference: "subject"
+    description: "Filter by diagnostic report category"
+    category: "Diagnostic Reports"
+    subcategory: "Categories"
+    
+  - resource: "DiagnosticReport"
+    element: "report_code"
+    path: "code.coding[*].code"
+    display_path: "code.coding[*].display"
+    endpoint: "/DiagnosticReport"
+    search_parameter: "code"
+    patient_reference: "subject"
+    description: "Filter by diagnostic report type/code"
+    category: "Diagnostic Reports"
+    subcategory: "Report Types"
+    
+  - resource: "DiagnosticReport"
+    element: "report_status"
+    path: "status"
+    display_path: "status"
+    endpoint: "/DiagnosticReport"
+    search_parameter: "status"
+    patient_reference: "subject"
+    description: "Filter by diagnostic report status"
+    category: "Diagnostic Reports"
+    subcategory: "Status"
+    
+  - resource: "DiagnosticReport"
+    element: "report_performer"
+    path: "performer[*].reference"
+    display_path: "performer[*].reference"
+    endpoint: "/DiagnosticReport"
+    search_parameter: "performer"
+    patient_reference: "subject"
+    description: "Filter by performing organization/practitioner"
+    category: "Diagnostic Reports"
+    subcategory: "Performers"
+    
+  # Lab Results filtering
+  - resource: "Observation"
+    element: "lab_code"
+    path: "code.coding[*].code"
+    display_path: "code.coding[*].display"
+    endpoint: "/Observation"
+    search_parameter: "code"
+    category_filter: "laboratory"
+    category: "Laboratory Tests"
+    subcategory: "Test Codes"
+    
+  
+    
+  - resource: "Observation"
+    element: "lab_category"
+    path: "category[*].coding[*].code"
+    display_path: "category[*].coding[*].display"
+    endpoint: "/Observation"
+    search_parameter: "category"
+    category_filter: "laboratory"
+    category: "Laboratory Tests"
+    subcategory: "Categories"
+    
+  # Measurements filtering
+  - resource: "Observation"
+    element: "measurement_code"
+    path: "code.coding[*].code"
+    display_path: "code.coding[*].display"
+    endpoint: "/Observation"
+    search_parameter: "code"
+    category_filter: "vital-signs"
+    category: "Vital Signs & Measurements"
+    subcategory: "Measurement Codes"
+    
+
+    
+  # General condition filtering
+  - resource: "Condition"
+    element: "condition_code"
+    path: "code.coding[*].code"
+    display_path: "code.coding[*].display"
+    endpoint: "/Condition"
+    search_parameter: "code"
+    category: "Medical Conditions"
+    subcategory: "Condition Codes"
+    
+  - resource: "Condition"
+    element: "condition_status"
+    path: "clinicalStatus.coding[*].code"
+    display_path: "clinicalStatus.coding[*].display"
+    endpoint: "/Condition"
+    search_parameter: "clinical-status"
+    category: "Medical Conditions"
+    subcategory: "Clinical Status"
+    
+    
+  # Procedure filtering
+  - resource: "Procedure"
+    element: "procedure_code"
+    path: "code.coding[*].code"
+    display_path: "code.coding[*].display"
+    endpoint: "/Procedure"
+    search_parameter: "code"
+    description: "Filter by procedure code"
+    category: "Procedures"
+    subcategory: "Procedure Codes"
+    
+  # Allergy filtering
+  - resource: "AllergyIntolerance"
+    element: "allergy_code"
+    path: "code.coding[*].code"
+    display_path: "code.coding[*].display"
+    endpoint: "/AllergyIntolerance"
+    search_parameter: "code"
+    category: "Allergies & Intolerances"
+    subcategory: "Substance Codes"
+    
+  - resource: "AllergyIntolerance"
+    element: "allergy_type"
+    path: "type"
+    display_path: "type"
+    endpoint: "/AllergyIntolerance"
+    search_parameter: "type"
+    category: "Allergies & Intolerances"
+    subcategory: "Allergy Types"
+    
+  - resource: "AllergyIntolerance"
+    element: "allergy_category"
+    path: "category[*]"
+    display_path: "category[*]"
+    endpoint: "/AllergyIntolerance"
+    search_parameter: "category"
+    category: "Allergies & Intolerances"
+    subcategory: "Categories"
+
+# Filter UI Organization - Controls how filters are grouped in the sidebar
+filter_ui:
+  # Separate sections for different filter types
+  sections:
+    - id: "patient_filters"
+      label: "Patient Filters"
+      description: "Filter and search for patients"
+      resources: ["Patient"]
+      icon: "👤"
+      expanded_by_default: true
+      
+    - id: "medical_resource_filters"
+      label: "Medical Resource Filters"
+      description: "Filter medical data and clinical resources"
+      resources: "auto"  # Auto-discover from filter_definitions, excluding Patient
+      exclude_resources: ["Patient"]
+      icon: "🏥"
+      expanded_by_default: true
+      
+    # Future: Could add more specialized sections
+    # - id: "administrative_filters"
+    #   label: "Administrative Filters"
+    #   resources: ["Appointment", "Coverage", "CarePlan"]
+
+# Feature Flags
+features:
+  condition_code_search: true
+  age_filtering: true
+  gender_filtering: true
+  demographic_search: true
+  patient_caching: true
+  background_prefetch: true
+  export_functionality: true
+  advanced_filters: true
+
+# Search Parameters Configuration
+search_parameters:
+  # Condition code search patterns
+  condition_codes:
+    - code: "J20N7001"
+      description: "Example condition code from diagram"
+    - code: "410429000"
+      description: "Cardiac arrest"
+  
+  # Age filtering
+  age:
+    min_age: 0
+    max_age: 150
+    default_ranges:
+      - name: "Children"
+        min: 0
+        max: 17
+      - name: "Adults"
+        min: 18
+        max: 64
+      - name: "Seniors"
+        min: 65
+        max: 150
+  
+  # Gender options
+  gender:
+    options:
+      - "male"
+      - "female" 
+      - "other"
+      - "unknown"
+
+# Environment-specific overrides
+environments:
+  development:
+    fhir:
+      base_url: "https://hapi.fhir.org/baseR4/"
+    backend:
+      port: 8000
+    frontend:
+      api_base_url: "http://localhost:8000"
+  
+  production:
+    fhir:
+      base_url: "${FHIR_BASE_URL}"
+    backend:
+      port: "${PORT:-8000}"
+    frontend:
+      api_base_url: "${API_BASE_URL}"
+    cache:
+      patient_cache_duration_minutes: 10
+      config_cache_duration_hours: 4
+
+# Logging Configuration
+logging:
+  level: "INFO"
+  format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+  
+# Performance Settings  
+performance:
+  request_timeout_seconds: 30
+  connection_pool_size: 10
+  max_concurrent_requests: 50
+
+# Notes Component Configuration - Fully Dynamic (following working [*] pattern)
+notes_configuration:
+  # Tab definitions - completely configurable
+  tabs:
+    - id: "documentreference"
+      label: "Document References"
+      
+      icon: "📄"
+      resource_type: "DocumentReference"
+      resource_key: "documentReferences"
+      description: "clinical documents"
+      
+    - id: "diagnosticreport"
+      label: "Diagnostic Reports"
+      icon: "📊"
+      resource_type: "DiagnosticReport"
+      resource_key: "diagnosticReports"
+      description: "diagnostic reports"
+
+  # Field mappings using [*] pattern like working filters
+  field_mappings:
+    DocumentReference:
+      id_path: "id"
+      title_paths:
+        - "type.text"
+        - "description"
+      title_fallback: "Clinical Document"
+      date_paths:
+        - "date"
+        - "created"
+      provider_paths:
+        - "author[*].display"
+        - "custodian.display"
+      provider_fallback: "Unknown Provider"
+      specialty_paths:
+        - "author[*].practitionerRole.specialty[*].coding[*].display"
+        - "author[*].practitionerRole.specialty[*].text"
+        - "context.practiceSetting.coding[*].display"
+        - "context.practiceSetting.text"
+      specialty_fallback: "General Medicine"
+      status_path: "status"
+      status_fallback: "unknown"
+      content_paths:
+        - "content[*].attachment.data"
+        - "description"
+      content_fallback: "Content not available"
+      category_paths:
+        - "category[*].text"
+      category_fallback: "General"
+      source_name: "DocumentReference"
+      type: "document"
+      
+    DiagnosticReport:
+      id_path: "id"
+      title_paths:
+        - "code.text"
+      title_fallback: "Diagnostic Report"
+      date_paths:
+        - "effectiveDateTime"
+        - "issued"
+      provider_paths:
+        - "performer[*].display"
+      provider_fallback: "Unknown Provider"
+      specialty_paths:
+        - "performer[*].practitionerRole.specialty[*].coding[*].display"
+        - "performer[*].practitionerRole.specialty[*].text"
+        - "category[*].coding[*].display"
+        - "category[*].text"
+      specialty_fallback: "Diagnostics"
+      status_path: "status"
+      status_fallback: "unknown"
+      content_paths:
+        - "conclusion"
+        - "presentedForm[*].data"
+      content_fallback: "Report content not available"
+      category_paths:
+        - "category[*].text"
+      category_fallback: "Diagnostic"
+      source_name: "DiagnosticReport"
+      type: "report"
+
+  # Table configuration - completely dynamic
+  table:
+    columns:
+      - id: "date"
+        label: "Date"
+        sortable: true
+        field_key: "date"
+        render_type: "formatted_date"
+        
+      - id: "title"
+        label: "Title"
+        sortable: true
+        field_key: "title"
+        render_type: "title_with_subtitle"
+        subtitle_field: "specialty"
+        
+      - id: "provider"
+        label: "Provider"
+        sortable: true
+        field_key: "provider"
+        render_type: "text"
+        
+      - id: "status"
+        label: "Status"
+        sortable: true
+        field_key: "status"
+        render_type: "status_badge"
+        
+      - id: "action"
+        label: "Action"
+        render_type: "action_button"
+        button_text: "View"
+        button_action: "open_modal"
+
+  # Search configuration
+  search:
+    enabled: true
+    placeholder: "Search notes by content, provider, or keywords..."
+    search_fields: ["title", "content", "provider", "specialty", "category"]
+
+  # Filter configuration - following your working pattern
+  filters:
+    - id: "dateRange"
+      label: "Date Range"
+      type: "static_select"
+      default: "all"
+      options:
+        - value: "all"
+          label: "All Dates"
+        - value: "1d"
+          label: "Last 24 Hours"
+        - value: "1w"
+          label: "Last Week"
+        - value: "1m"
+          label: "Last Month"
+        - value: "3m"
+          label: "Last 3 Months"
+        - value: "1y"
+          label: "Last Year"
+          
+    - id: "noteType"
+      label: "All Types"
+      type: "dynamic_select"
+      source_field: "category"
+      default: "all"
+      
+    - id: "provider"
+      label: "All Providers"
+      type: "dynamic_select"
+      source_field: "provider"
+      default: "all"
+      
+    - id: "specialty"
+      label: "All Specialties"
+      type: "dynamic_select"
+      source_field: "specialty"
+      default: "all"
+      
+    - id: "status"
+      label: "All Statuses"
+      type: "dynamic_select"
+      source_field: "status"
+      default: "all"
+
+  # Sorting configuration
+  sorting:
+    default_key: "date"
+    default_direction: "desc"
+    allowed_keys: ["date", "title", "provider", "status"]
+
+  # Modal configuration - completely dynamic
+  modal:
+    title_templates:
+      DocumentReference: "Document Reference Details"
+      DiagnosticReport: "Diagnostic Report Details"
+      default: "{source_name} Details"
+    
+    header_fields:
+      - field_key: "resourceType"
+        label: "Resource Type"
+        render_type: "resource_badge"
+        
+      - field_key: "date"
+        label: "Date"
+        render_type: "formatted_date"
+        
+      - field_key: "status"
+        label: "Status"
+        render_type: "status_badge"
+    
+    info_fields:
+      - field_key: "provider"
+        label: "Provider"
+        prefix: "Provider: "
+        
+      - field_key: "specialty"
+        label: "Specialty"
+        prefix: "Specialty: "
+        
+      - field_key: "category"
+        label: "Category"
+        prefix: "Category: "
+    
+    content_field:
+      field_key: "content"
+      label: "Content"
+      render_type: "content_block"
+
+  # Status color mappings - configurable
+  status_colors:
+    final: "#28a745"
+    preliminary: "#ffc107"
+    amended: "#17a2b8"
+    unknown: "#6c757d"
+    default: "#6c757d"
+    
+  # Resource type colors
+  resource_colors:
+    DocumentReference: "#007bff"
+    DiagnosticReport: "#28a745"
+    default: "#6c757d"
+
+  # Date range calculations (days)
+  date_ranges:
+    "1d": 1
+    "1w": 7
+    "1m": 30
+    "3m": 90
+    "1y": 365
+
+  # Empty state configuration
+  empty_state:
+    icon: "📝"
+    message_templates:
+      documentreference: "No document references found"
+      diagnosticreport: "No diagnostic reports found"
+      default: "No items found"
+    submessage: "Try adjusting your search terms or filters"
