@@ -1,6 +1,4 @@
-<p align="center">
-  <img src="https://raw.githubusercontent.com/Manjula-819/FHIR_resource_tabular_viewer/main/docs/logo.png" alt="Data for the Common Good" width="400"/>
-</p>
+
 # FHIR Resource Viewer Application
 
 A comprehensive React-based web application for searching, filtering, and analyzing FHIR (Fast Healthcare Interoperability Resources) patient data. Built with a dynamic, configuration-driven architecture that supports real-time patient search, advanced filtering, and detailed medical data visualization.
