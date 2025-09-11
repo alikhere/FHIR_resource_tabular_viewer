@@ -1,6 +1,7 @@
-
-gsoc
-D4CG# FHIR Resource Viewer Application
+<p align="center">
+  <img src="https://raw.githubusercontent.com/Manjula-819/FHIR_resource_tabular_viewer/main/docs/logo.png" alt="Data for the Common Good" width="400"/>
+</p>
+# FHIR Resource Viewer Application
 
 A comprehensive React-based web application for searching, filtering, and analyzing FHIR (Fast Healthcare Interoperability Resources) patient data. Built with a dynamic, configuration-driven architecture that supports real-time patient search, advanced filtering, and detailed medical data visualization.
 
@@ -72,38 +73,83 @@ The application follows a modular, component-based architecture with clear separ
 
 ```
 final-fhir/
-├── public/                          # Static assets and HTML template
-│   ├── index.html                   # Main HTML template
-│   ├── manifest.json                # PWA configuration
-│   ├── favicon.ico                  # Application icon
-│   └── logo192.png, logo512.png     # PWA icons
-├── src/                             # Source code
-│   ├── components/                  # React components
-│   │   ├── App.js                   # Main application component
-│   │   ├── PatientDetails.js        # Patient information and tabbed interface
-│   │   ├── Labs.js                  # Laboratory results display
-│   │   ├── LabsContainer.js         # Labs tab container
-│   │   ├── LabsTimeSeries.js        # Time-series lab analysis
-│   │   ├── Measurements.js          # Vital signs and measurements
-│   │   ├── Notes.js                 # Clinical notes and documents
-│   │   ├── GeneralInformation.js    # Patient demographics and summary
-│   │   ├── DynamicFilterSidebar.js  # Advanced filtering interface
-│   │   ├── DynamicResourceTab.js    # Configurable resource display
-│   │   ├── AddTabModal.js           # Dynamic tab creation modal
-│   │   └── Header.js                # Application header
+├── fhir-backend-dynamic/            # Backend (FastAPI/Flask-based service)
+│   ├── app/                         # Application source
+│   │   ├── core/                    # Core utilities
+│   │   │   └── logging.py           # Logging configuration
+│   │   ├── models/                  # Data models
+│   │   │   └── server.py            # Server model
+│   │   ├── routers/                 # API routes
+│   │   │   ├── aggregate.py         # Aggregation endpoints
+│   │   │   ├── filters.py           # Filter endpoints
+│   │   │   ├── health.py            # Health check endpoint
+│   │   │   ├── metadata.py          # Metadata endpoints
+│   │   │   ├── references.py        # Reference endpoints
+│   │   │   ├── resources.py         # Resource endpoints
+│   │   │   └── servers.py           # Server management endpoints
+│   │   ├── services/                # Service layer
+│   │   │   ├── aggregation.py       # Aggregation service
+│   │   │   ├── cache_manager.py     # Cache handling
+│   │   │   ├── data_availability.py # Data availability checks
+│   │   │   ├── errors.py            # Error handling
+│   │   │   ├── fhir.py              # FHIR utilities
+│   │   │   ├── http.py              # HTTP utilities
+│   │   │   ├── path_extractor.py    # Path extraction logic
+│   │   │   ├── ratelimit.py         # Rate limiting service
+│   │   │   ├── registry.py          # Registry service
+│   │   │   └── schema.py            # Schema validation
+│   │   ├── config.py                # Backend configuration
+│   │   ├── main.py                  # Application entrypoint
+│   │   └── startup.py               # Startup logic
+│   ├── requirements.txt             # Backend dependencies
+│   └── tests/                       # Backend tests
+│       └── test_aggregation.py
+│
+├── public/                          # Static assets for React
+│   ├── index.html                   # Root HTML file
+│   ├── favicon.ico                  # App icon
+│   ├── manifest.json                # PWA config
+│   └── logo192.png, logo512.png     # Logos
+│
+├── src/                             # React frontend source
+│   ├── __tests__/                   # Frontend tests
+│   │   └── aggregateApi.test.js
+│   ├── hooks/                       # React hooks
+│   │   └── useAggregatedData.js
 │   ├── services/                    # Service layer
-│   │   ├── api.js                   # API communication layer
-│   │   ├── tabFilterService.js      # Tab filtering logic
-│   │   ├── filterResourceCache.js   # Resource caching system
-│   │   └── filterUtils.js           # Filter utilities
-│   ├── config.js                    # Configuration management
-│   ├── App.css                      # Application styles
-│   └── index.js                     # Application entry point
-├── configuration/                   # Configuration files
-│   └── config.yaml                  # Main configuration file
-├── test_filters.html                # Filter testing utility
-├── package.json                     # NPM dependencies and scripts
-└── README.md                        # Project documentation
+│   │   ├── api.js                   # API communication
+│   │   ├── aggregateApi.js          # Aggregated API calls
+│   │   └── tabFilterService.js      # Filtering logic
+│   ├── components/                  # React components
+│   │   ├── App.js                   # Main app component
+│   │   ├── PatientDetails.js        # Patient detail view
+│   │   ├── PatientTable.js          # Patient list/table
+│   │   ├── Labs.js                  # Lab results
+│   │   ├── LabsContainer.js         # Labs container
+│   │   ├── LabsTimeSeries.js        # Time series labs
+│   │   ├── Measurements.js          # Measurements display
+│   │   ├── Notes.js                 # Notes section
+│   │   ├── GeneralInformation.js    # Patient demographics
+│   │   ├── DynamicFilterSidebar.js  # Sidebar filters
+│   │   ├── DynamicResourceTab.js    # Resource tab view
+│   │   ├── AddTabModal.js           # Add new tab modal
+│   │   └── Header.js                # App header
+│   ├── styles/                      # CSS files
+│   │   ├── App.css
+│   │   ├── Dynamic.css
+│   │   ├── PatientDetails.css
+│   │   └── PatientTable.css
+│   ├── config.js                    # Frontend config
+│   └── index.js                     # React entry point
+│
+├── CONFIG.md                        # Project configuration guide
+├── config.yaml                      # Global config
+├── package.json                     # NPM dependencies
+├── package-lock.json                # Dependency lockfile
+├── restart-backend.bat              # Backend restart script (Windows)
+├── test_filters.html                # Standalone filter testing page
+└── README.md                        # Documentation
+
 ```
 
 ## Configuration System
@@ -280,6 +326,8 @@ npm run build
    - Enter patient name, ID, or other identifiers
    - Use wildcard characters for broader searches
    - Apply demographic filters as needed
+  
+
 
 2. **Filter Application**
    - Open filter sidebar using filter button
