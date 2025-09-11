@@ -1,4 +1,6 @@
-# FHIR Patient Search Application
+
+gsoc
+D4CG# FHIR Resource Viewer Application
 
 A comprehensive React-based web application for searching, filtering, and analyzing FHIR (Fast Healthcare Interoperability Resources) patient data. Built with a dynamic, configuration-driven architecture that supports real-time patient search, advanced filtering, and detailed medical data visualization.
 
