@@ -1,5 +1,16 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { TrendingUp, Calendar, Filter, BarChart3, LineChart, Table, Download, List } from 'lucide-react';
+import {
+  LineChart as ReLineChart,
+  Line,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  Legend,
+  ResponsiveContainer,
+  ReferenceLine,
+} from 'recharts';
 
 const LabsTimeSeries = ({ 
   observations = [], 
@@ -386,7 +397,9 @@ const LabsTimeSeries = ({
   const renderSimpleGraph = () => {
     const selectedTestData = Array.from(selectedTests)
       .filter(testName => trendingData[testName])
-      .slice(0, 3); // Limit to 3 tests for readability
+      .slice(0, 3);
+
+    const COLORS = ['#007bff', '#28a745', '#dc3545'];
 
     if (selectedTestData.length === 0) {
       return (
@@ -420,272 +433,84 @@ const LabsTimeSeries = ({
         <div style={{ marginBottom: '1rem' }}>
           <h3 style={{ margin: 0, color: '#333', fontSize: '1.3rem' }}>Lab Results Trend Over Time</h3>
           <p style={{ margin: '0.5rem 0 0 0', color: '#666', fontSize: '0.9rem' }}>
-            Tracking {selectedTestData.length} test{selectedTestData.length !== 1 ? 's' : ''} with monthly timeline
+            Tracking {selectedTestData.length} test{selectedTestData.length !== 1 ? 's' : ''} — red dots indicate abnormal values
           </p>
         </div>
 
-        {/* Simple ASCII-style graph representation */}
-        {selectedTestData.map(testName => {
+        {selectedTestData.map((testName, colorIdx) => {
           const data = trendingData[testName];
-          
-          // Safety checks for data
-          if (!data || data.length === 0) {
-            return (
-              <div key={testName} style={{ marginBottom: '2rem', padding: '1rem', backgroundColor: '#f8f9fa', borderRadius: '8px' }}>
-                <h4 style={{ margin: '0 0 1rem 0', color: '#666' }}>
-                  {testName}
-                </h4>
-                <p style={{ color: '#999', fontStyle: 'italic' }}>No data available for trending</p>
-              </div>
-            );
-          }
-          
-          const numericValues = data.map(d => d.value).filter(v => v != null && !isNaN(v));
-          if (numericValues.length === 0) {
-            return (
-              <div key={testName} style={{ marginBottom: '2rem', padding: '1rem', backgroundColor: '#f8f9fa', borderRadius: '8px' }}>
-                <h4 style={{ margin: '0 0 1rem 0', color: '#666' }}>
-                  {testName}
-                </h4>
-                <p style={{ color: '#999', fontStyle: 'italic' }}>No numeric values available for trending</p>
-              </div>
-            );
-          }
-          
-          const maxValue = Math.max(...numericValues);
-          const minValue = Math.min(...numericValues);
-          const range = maxValue - minValue || 1;
+          if (!data || data.length === 0) return null;
 
-          // Calculate date range for chart info
-          const validData = data.filter(d => d.date && d.date instanceof Date && !isNaN(d.date));
-          const sortedData = [...validData].sort((a, b) => a.date - b.date);
-          const minDate = sortedData.length > 0 ? sortedData[0].date : new Date();
-          const maxDate = sortedData.length > 0 ? sortedData[sortedData.length - 1].date : new Date();
+          const unit = data[0]?.unit || '';
+          const chartData = data.map(d => ({
+            date: d.date instanceof Date
+              ? d.date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: '2-digit' })
+              : String(d.date),
+            value: typeof d.value === 'number' ? parseFloat(d.value.toFixed(2)) : null,
+            isAbnormal: d.isAbnormal,
+          }));
+
+          const values = chartData.map(d => d.value).filter(v => v !== null);
+          const minVal = values.length ? Math.min(...values) : 0;
+          const maxVal = values.length ? Math.max(...values) : 1;
+          const color = COLORS[colorIdx % COLORS.length];
+
+          const CustomDot = (props) => {
+            const { cx, cy, payload } = props;
+            return (
+              <circle
+                key={`dot-${cx}-${cy}`}
+                cx={cx}
+                cy={cy}
+                r={5}
+                fill={payload.isAbnormal ? '#dc3545' : color}
+                stroke="white"
+                strokeWidth={1.5}
+              />
+            );
+          };
 
           return (
-            <div key={testName} style={{ marginBottom: '2rem' }}>
-              <h4 style={{ margin: '0 0 1rem 0', color: '#333' }}>
-                {testName} {data[0]?.unit && `(${data[0].unit})`}
+            <div key={testName} style={{ marginBottom: '2.5rem' }}>
+              <h4 style={{ margin: '0 0 0.75rem 0', color: '#333' }}>
+                {testName}{unit ? ` (${unit})` : ''}
               </h4>
-              
-              <div style={{ 
-                backgroundColor: '#f8f9fa', 
-                padding: '1rem', 
-                borderRadius: '4px',
-                fontFamily: 'monospace',
-                fontSize: '0.8rem',
-                overflowX: 'auto'
-              }}>
-                <div style={{ marginBottom: '0.5rem', color: '#666' }}>
-                  Max: {maxValue} | Min: {minValue} | Range: {range.toFixed(2)}
-                </div>
-                
-                {/* Enhanced SVG-based graph representations with dynamic scaling */}
-                <div style={{ backgroundColor: '#fafafa', padding: '20px', borderRadius: '8px', marginTop: '10px' }}>
-                  {(() => {
-                    // Check for valid data
-                    if (validData.length === 0) {
-                      return (
-                        <div style={{ padding: '1rem', color: '#999', fontStyle: 'italic' }}>
-                          No valid dates available for charting
-                        </div>
-                      );
-                    }
-
-                    // Chart dimensions
-                    const chartWidth = 800;
-                    const chartHeight = 300;
-                    const chartPadding = { left: 60, right: 40, top: 40, bottom: 80 };
-                    const plotWidth = chartWidth - chartPadding.left - chartPadding.right;
-                    const plotHeight = chartHeight - chartPadding.top - chartPadding.bottom;
-
-                    // Calculate dynamic value range with padding
-                    const valueRange = maxValue - minValue || 1;
-                    const valuePadding = valueRange * 0.1;
-                    const displayMinValue = Math.max(0, minValue - valuePadding);
-                    const displayMaxValue = maxValue + valuePadding;
-                    const displayRange = displayMaxValue - displayMinValue;
-
-                    // Prepare data for vertical bars
-                    const barData = sortedData.map((d, index) => {
-                      const barHeight = ((d.value - displayMinValue) / displayRange) * plotHeight;
-                      const barWidth = Math.max(15, plotWidth / sortedData.length - 10);
-                      const barX = chartPadding.left + (index * (plotWidth / sortedData.length)) + (plotWidth / sortedData.length - barWidth) / 2;
-                      const barY = chartPadding.top + plotHeight - barHeight;
-                      
-                      return {
-                        x: barX,
-                        y: barY,
-                        width: barWidth,
-                        height: Math.max(2, barHeight),
-                        value: d.value,
-                        date: d.date,
-                        color: d.value > maxValue * 0.8 ? '#dc3545' : 
-                               d.value > maxValue * 0.6 ? '#fd7e14' :
-                               d.value > maxValue * 0.4 ? '#ffc107' : '#28a745'
-                      };
-                    });
-
-                    // Y-axis ticks
-                    const yTicks = [];
-                    for (let i = 0; i <= 5; i++) {
-                      yTicks.push(displayMinValue + (displayRange * i / 5));
-                    }
-
-                    return (
-                      <svg 
-                        width="100%" 
-                        height={chartHeight + 20}
-                        viewBox={`0 0 ${chartWidth} ${chartHeight + 20}`}
-                        style={{ border: '1px solid #e1e5e9', borderRadius: '4px', backgroundColor: 'white' }}
-                      >
-                        {/* Chart background */}
-                        <rect 
-                          x={chartPadding.left} 
-                          y={chartPadding.top} 
-                          width={plotWidth} 
-                          height={plotHeight} 
-                          fill="#fafbfc" 
-                          stroke="#e1e5e9" 
-                          strokeWidth="1"
-                        />
-
-                        {/* Horizontal grid lines */}
-                        {yTicks.map((tick, i) => {
-                          const y = chartPadding.top + plotHeight - ((tick - displayMinValue) / displayRange) * plotHeight;
-                          return (
-                            <line 
-                              key={`grid-${i}`}
-                              x1={chartPadding.left} 
-                              y1={y} 
-                              x2={chartPadding.left + plotWidth} 
-                              y2={y} 
-                              stroke="#f1f3f4" 
-                              strokeWidth="1"
-                            />
-                          );
-                        })}
-
-                        {/* Vertical bars */}
-                        {barData.map((bar, i) => (
-                          <g key={`bar-${i}`}>
-                            {/* Bar */}
-                            <rect
-                              x={bar.x}
-                              y={bar.y}
-                              width={bar.width}
-                              height={bar.height}
-                              fill={bar.color}
-                              stroke="#fff"
-                              strokeWidth="1"
-                              opacity="0.8"
-                            />
-                            {/* Value label on top of bar */}
-                            <text
-                              x={bar.x + bar.width / 2}
-                              y={bar.y - 5}
-                              textAnchor="middle"
-                              fontSize="10"
-                              fill="#333"
-                              fontWeight="bold"
-                            >
-                              {bar.value.toFixed(1)}
-                            </text>
-                            {/* Date label below x-axis */}
-                            <text
-                              x={bar.x + bar.width / 2}
-                              y={chartPadding.top + plotHeight + 15}
-                              textAnchor="middle"
-                              fontSize="10"
-                              fill="#666"
-                              transform={`rotate(-45 ${bar.x + bar.width / 2} ${chartPadding.top + plotHeight + 15})`}
-                            >
-                              {bar.date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
-                            </text>
-                          </g>
-                        ))}
-
-                        {/* Y-axis */}
-                        <line 
-                          x1={chartPadding.left} 
-                          y1={chartPadding.top} 
-                          x2={chartPadding.left} 
-                          y2={chartPadding.top + plotHeight} 
-                          stroke="#333" 
-                          strokeWidth="2"
-                        />
-
-                        {/* X-axis */}
-                        <line 
-                          x1={chartPadding.left} 
-                          y1={chartPadding.top + plotHeight} 
-                          x2={chartPadding.left + plotWidth} 
-                          y2={chartPadding.top + plotHeight} 
-                          stroke="#333" 
-                          strokeWidth="2"
-                        />
-
-                        {/* Y-axis labels */}
-                        {yTicks.map((tick, i) => {
-                          const y = chartPadding.top + plotHeight - ((tick - displayMinValue) / displayRange) * plotHeight;
-                          return (
-                            <text 
-                              key={`y-label-${i}`}
-                              x={chartPadding.left - 10} 
-                              y={y + 4} 
-                              textAnchor="end" 
-                              fontSize="12" 
-                              fill="#666"
-                            >
-                              {tick.toFixed(1)}
-                            </text>
-                          );
-                        })}
-
-                        {/* Chart title */}
-                        <text 
-                          x={chartWidth / 2} 
-                          y="25" 
-                          textAnchor="middle" 
-                          fontSize="16" 
-                          fontWeight="bold" 
-                          fill="#333"
-                        >
-                          {testName} - Vertical Bar Comparison
-                        </text>
-
-                        {/* Y-axis label */}
-                        <text 
-                          x="20" 
-                          y={chartHeight / 2} 
-                          textAnchor="middle" 
-                          fontSize="12" 
-                          fill="#666"
-                          transform={`rotate(-90 20 ${chartHeight / 2})`}
-                        >
-                          Value ({data[0]?.unit || 'units'})
-                        </text>
-                      </svg>
-                    );
-                  })()}
-                  
-                  
-                  {/* Chart information */}
-                  <div style={{ 
-                    display: 'flex', 
-                    justifyContent: 'space-between', 
-                    marginTop: '10px', 
-                    padding: '10px',
-                    backgroundColor: '#f8f9fa',
-                    borderRadius: '4px',
-                    fontSize: '0.8rem',
-                    color: '#666'
-                  }}>
-                    <span>{data.length} data points</span>
-                    <span>{minDate.toLocaleDateString('en-US', { month: 'short', year: 'numeric' })} to {maxDate.toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}</span>
-                    <span>Range: {minValue.toFixed(1)} - {maxValue.toFixed(1)} {data[0]?.unit || ''}</span>
-                  </div>
-                </div>
+              <ResponsiveContainer width="100%" height={260}>
+                <ReLineChart data={chartData} margin={{ top: 10, right: 30, left: 10, bottom: 50 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                  <XAxis
+                    dataKey="date"
+                    angle={-35}
+                    textAnchor="end"
+                    interval={0}
+                    tick={{ fontSize: 11, fill: '#666' }}
+                    height={60}
+                  />
+                  <YAxis
+                    domain={[Math.max(0, minVal * 0.9), maxVal * 1.1]}
+                    tickFormatter={v => v.toFixed(1)}
+                    tick={{ fontSize: 11, fill: '#666' }}
+                    unit={unit ? ` ${unit}` : ''}
+                    width={70}
+                  />
+                  <Tooltip
+                    formatter={(value) => [`${value} ${unit}`, testName]}
+                    contentStyle={{ fontSize: '0.85rem', borderRadius: '6px' }}
+                  />
+                  <Line
+                    type="monotone"
+                    dataKey="value"
+                    stroke={color}
+                    strokeWidth={2}
+                    dot={<CustomDot />}
+                    activeDot={{ r: 7, fill: color }}
+                    connectNulls={false}
+                  />
+                </ReLineChart>
+              </ResponsiveContainer>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem', color: '#666', padding: '4px 8px', backgroundColor: '#f8f9fa', borderRadius: '4px' }}>
+                <span>{data.length} data points</span>
+                <span>Range: {minVal.toFixed(1)} – {maxVal.toFixed(1)} {unit}</span>
               </div>
             </div>
           );
