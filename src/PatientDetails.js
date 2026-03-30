@@ -10,7 +10,18 @@ import * as api from "./api";
 import { CONFIG } from "./config";
 import "./PatientDetails.css";
 
+const getFileSource = () => {
+  try { return JSON.parse(sessionStorage.getItem('fhirFileSource')); } catch { return null; }
+};
+
 const PatientDetails = ({ patientId, onBackToList }) => {
+  const fileSource = getFileSource();
+
+  const fetchPatientResources = (resourceType, count, page, offset) =>
+    fileSource
+      ? api.getFilePatientResources(fileSource.sourceId, patientId, resourceType, count, offset)
+      : api.getPatientResources(patientId, resourceType, count, page, offset);
+
   const [activeTab, setActiveTab] = useState("general");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -139,8 +150,9 @@ const PatientDetails = ({ patientId, onBackToList }) => {
 
       console.log("Loading basic patient info for ID:", patientId);
 
-      // Only load basic patient info, not medical resources
-      const response = await api.getByIdDetailed("Patient", patientId);
+      const response = fileSource
+        ? await api.getFilePatient(fileSource.sourceId, patientId)
+        : await api.getByIdDetailed("Patient", patientId);
 
       if (!response.success) {
         setError(response.message || "Patient not found");
@@ -223,8 +235,7 @@ const PatientDetails = ({ patientId, onBackToList }) => {
         case "measurements":
           if (!loadedTabs.observations) {
             console.log("Loading Observations...");
-            const obsResponse = await api.getPatientResources(
-              patientId,
+            const obsResponse = await fetchPatientResources(
               "Observation",
               CONFIG.ui.defaultPageSize,
               1,
@@ -311,8 +322,7 @@ const PatientDetails = ({ patientId, onBackToList }) => {
         case "labs":
           if (!loadedTabs.observations) {
             console.log("Loading Observations for Labs...");
-            const obsResponse = await api.getPatientResources(
-              patientId,
+            const obsResponse = await fetchPatientResources(
               "Observation",
               CONFIG.ui.defaultPageSize,
               1,
@@ -365,8 +375,7 @@ const PatientDetails = ({ patientId, onBackToList }) => {
           const promises = [];
           if (!loadedTabs.diagnosticReports) {
             promises.push(
-              api.getPatientResources(
-                patientId,
+              fetchPatientResources(
                 "DiagnosticReport",
                 CONFIG.ui.defaultPageSize,
                 1,
@@ -376,8 +385,7 @@ const PatientDetails = ({ patientId, onBackToList }) => {
           }
           if (!loadedTabs.documentReferences) {
             promises.push(
-              api.getPatientResources(
-                patientId,
+              fetchPatientResources(
                 "DocumentReference",
                 CONFIG.ui.defaultPageSize,
                 1,
@@ -496,8 +504,7 @@ const PatientDetails = ({ patientId, onBackToList }) => {
       setTabLoading((prev) => ({ ...prev, [activeTab]: true }));
 
       const offset = (newPage - 1) * CONFIG.ui.defaultPageSize;
-      const response = await api.getPatientResources(
-        patientId,
+      const response = await fetchPatientResources(
         resourceType,
         CONFIG.ui.defaultPageSize,
         newPage,
@@ -581,63 +588,36 @@ const PatientDetails = ({ patientId, onBackToList }) => {
   };
 
   const loadAvailableResources = async () => {
+    const fixedTabResources = [
+      "Patient",
+      "Observation",
+      "DiagnosticReport",
+      "DocumentReference",
+    ];
+
+    const toResourceItems = (resourceTypes) =>
+      resourceTypes
+        .filter((rt) => !fixedTabResources.includes(rt))
+        .map((rt) => ({
+          id: rt,
+          label: rt,
+          description: getResourceDescription(rt),
+          icon: getResourceIcon(rt.toLowerCase()),
+          count: 0,
+        }));
+
     try {
       console.log("🔍 Loading available resources from FHIR metadata...");
-
-      // Use the new metadata API to get supported resources
       const metadataResponse = await api.getSupportedResources();
 
       if (metadataResponse.success && metadataResponse.supported_resources) {
-        const resourceTypes = metadataResponse.supported_resources;
-        console.log("📋 Supported resources from FHIR server:", resourceTypes);
-
-        // Define which resources are handled by fixed tabs (dynamic based on actual implementation)
-        const fixedTabResources = [
-          "Patient", // Patient demographics handled by general tab
-          "Observation", // Handled by measurements and labs tabs
-          "DiagnosticReport", // Handled by labs and notes tabs
-          "DocumentReference", // Handled by notes tab
-        ];
-
-        const resources = resourceTypes
-          .filter(
-            (resourceType) =>
-              // Exclude resources that are already handled by fixed tabs
-              !fixedTabResources.includes(resourceType)
-          )
-          .map((resourceType) => ({
-            id: resourceType, // Keep proper capitalization for FHIR API calls
-            label: resourceType,
-            description: getResourceDescription(resourceType),
-            icon: getResourceIcon(resourceType.toLowerCase()),
-            count: 0,
-          }));
-
-        setAvailableResources(resources);
+        console.log("📋 Supported resources from FHIR server:", metadataResponse.supported_resources);
+        setAvailableResources(toResourceItems(metadataResponse.supported_resources));
       } else {
         console.warn("⚠️ Metadata API failed, falling back to legacy method");
-        // Fallback to old method if metadata API fails
         const resourceTypes = await api.listResourceTypes();
-
-        const resources = resourceTypes
-          .filter(
-            (resourceType) =>
-              // Exclude resources that are already handled by fixed tabs
-              !fixedTabResources.includes(resourceType)
-          )
-          .map((resourceType) => ({
-            id: resourceType, // Keep proper capitalization for FHIR API calls
-            label: resourceType,
-            description: getResourceDescription(resourceType),
-            icon: getResourceIcon(resourceType.toLowerCase()),
-            count: 0,
-          }));
-
-        setAvailableResources(resources);
-        console.log(
-          "📋 Available resources loaded via fallback:",
-          resources.length
-        );
+        setAvailableResources(toResourceItems(resourceTypes));
+        console.log("📋 Available resources loaded via fallback:", resourceTypes.length);
       }
     } catch (error) {
       console.error("❌ Error loading available resources:", error);
@@ -905,8 +885,7 @@ const PatientDetails = ({ patientId, onBackToList }) => {
     } else {
       // Fetch fresh data from server
       console.log(`Fetching ${resourceType} data from server...`);
-      const response = await api.getPatientResources(
-        patientId,
+      const response = await fetchPatientResources(
         resourceType,
         100
       );
