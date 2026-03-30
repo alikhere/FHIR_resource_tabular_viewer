@@ -3,38 +3,51 @@ from typing import Optional
 import json
 import uuid
 import logging
+import os
+import tempfile
 from datetime import datetime, timedelta, date
 
 router = APIRouter(prefix="/sources/file", tags=["file-source"])
 logger = logging.getLogger(__name__)
 
-_file_store = {}
-_store_expiry = {}
+STORE_DIR = os.path.join(tempfile.gettempdir(), "fhir_file_sources")
+os.makedirs(STORE_DIR, exist_ok=True)
+
+_meta_cache = {}   # source_id -> {filename, uploaded_at}
 STORE_DURATION = timedelta(hours=2)
 
 
-def _cleanup_expired():
-    now = datetime.now()
-    expired = [k for k, v in _store_expiry.items() if now > v]
-    for k in expired:
-        _file_store.pop(k, None)
-        _store_expiry.pop(k, None)
+def _source_path(source_id: str) -> str:
+    return os.path.join(STORE_DIR, f"{source_id}.json")
 
 
-def _calc_age(birth_date_str):
-    if not birth_date_str:
+def _load_source(source_id: str):
+    path = _source_path(source_id)
+    if not os.path.exists(path):
         return None
     try:
-        birth = date.fromisoformat(str(birth_date_str)[:10])
-        today = date.today()
-        age = today.year - birth.year - ((today.month, today.day) < (birth.month, birth.day))
-        return age if age >= 0 else None
+        with open(path, "r") as f:
+            return json.load(f)
     except Exception:
         return None
 
 
+def _cleanup_expired():
+    now = datetime.now()
+    for fname in os.listdir(STORE_DIR):
+        if not fname.endswith(".json"):
+            continue
+        fpath = os.path.join(STORE_DIR, fname)
+        age = datetime.now() - datetime.fromtimestamp(os.path.getmtime(fpath))
+        if age > STORE_DURATION:
+            try:
+                os.remove(fpath)
+            except Exception:
+                pass
+
+
 def _parse_entries(bundle):
-    if bundle.get("resourceType") == "Bundle":
+    if isinstance(bundle, dict) and bundle.get("resourceType") == "Bundle":
         return [e.get("resource") for e in bundle.get("entry", []) if e.get("resource")]
     if isinstance(bundle, list):
         return bundle
@@ -51,23 +64,24 @@ async def upload_fhir_file(file: UploadFile = File(...)):
     except json.JSONDecodeError:
         raise HTTPException(status_code=400, detail="Invalid JSON — expected a FHIR Bundle or resource")
 
-    entries = _parse_entries(bundle)
-    entries = [e for e in entries if e]
+    entries = [e for e in _parse_entries(bundle) if e]
 
     source_id = str(uuid.uuid4())
-    _file_store[source_id] = {
+    store_data = {
         "entries": entries,
         "filename": file.filename,
         "uploaded_at": datetime.now().isoformat(),
     }
-    _store_expiry[source_id] = datetime.now() + STORE_DURATION
+
+    with open(_source_path(source_id), "w") as f:
+        json.dump(store_data, f)
 
     resource_counts = {}
     for entry in entries:
         rt = entry.get("resourceType", "Unknown")
         resource_counts[rt] = resource_counts.get(rt, 0) + 1
 
-    logger.info(f"Uploaded file: {file.filename} — {len(entries)} resources, source_id={source_id}")
+    logger.info(f"Uploaded: {file.filename} — {len(entries)} resources, source_id={source_id}")
 
     return {
         "success": True,
@@ -78,6 +92,13 @@ async def upload_fhir_file(file: UploadFile = File(...)):
     }
 
 
+def _get_source_or_404(source_id: str):
+    data = _load_source(source_id)
+    if data is None:
+        raise HTTPException(status_code=404, detail="File source not found or expired")
+    return data
+
+
 @router.get("/{source_id}/Patient")
 async def get_patients(
     source_id: str,
@@ -85,23 +106,18 @@ async def get_patients(
     _getpagesoffset: int = Query(default=0),
     search: Optional[str] = Query(default=None),
 ):
-    if source_id not in _file_store:
-        raise HTTPException(status_code=404, detail="File source not found or expired")
-
-    entries = _file_store[source_id]["entries"]
-    patients = [e for e in entries if e.get("resourceType") == "Patient"]
+    store = _get_source_or_404(source_id)
+    patients = [e for e in store["entries"] if e.get("resourceType") == "Patient"]
 
     if search:
         q = search.lower()
-        matched = []
-        for p in patients:
-            name_text = " ".join(
+        patients = [
+            p for p in patients
+            if q in " ".join(
                 " ".join(n.get("given", [])) + " " + n.get("family", "")
                 for n in p.get("name", [])
-            ).lower()
-            if q in name_text or q in p.get("id", "").lower():
-                matched.append(p)
-        patients = matched
+            ).lower() or q in p.get("id", "").lower()
+        ]
 
     total = len(patients)
     page_data = patients[_getpagesoffset : _getpagesoffset + _count]
@@ -119,19 +135,16 @@ async def get_patients(
             "offset": _getpagesoffset,
         },
         "source": "file",
-        "filename": _file_store[source_id]["filename"],
+        "filename": store["filename"],
     }
 
 
 @router.get("/{source_id}/Patient/{patient_id}")
 async def get_patient(source_id: str, patient_id: str):
-    if source_id not in _file_store:
-        raise HTTPException(status_code=404, detail="File source not found or expired")
-
-    for entry in _file_store[source_id]["entries"]:
+    store = _get_source_or_404(source_id)
+    for entry in store["entries"]:
         if entry.get("resourceType") == "Patient" and entry.get("id") == patient_id:
             return {"success": True, "data": entry, "all": entry, "fixed": entry, "dynamic": {}}
-
     raise HTTPException(status_code=404, detail=f"Patient {patient_id} not found in file")
 
 
@@ -143,11 +156,9 @@ async def get_patient_resources(
     _count: int = Query(default=50),
     _getpagesoffset: int = Query(default=0),
 ):
-    if source_id not in _file_store:
-        raise HTTPException(status_code=404, detail="File source not found or expired")
-
+    store = _get_source_or_404(source_id)
     resources = []
-    for entry in _file_store[source_id]["entries"]:
+    for entry in store["entries"]:
         if entry.get("resourceType") != resource_type:
             continue
         for ref_key in ("subject", "patient", "beneficiary"):
@@ -178,9 +189,9 @@ async def get_patient_resources(
 
 @router.delete("/{source_id}")
 async def delete_file_source(source_id: str):
-    if source_id not in _file_store:
+    path = _source_path(source_id)
+    if not os.path.exists(path):
         raise HTTPException(status_code=404, detail="File source not found")
-    _file_store.pop(source_id, None)
-    _store_expiry.pop(source_id, None)
+    os.remove(path)
     logger.info(f"Deleted file source: {source_id}")
     return {"success": True}

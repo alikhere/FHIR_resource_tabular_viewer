@@ -1,0 +1,209 @@
+{
+  "resourceType": "Bundle",
+  "type": "collection",
+  "entry": [
+    {
+      "resource": {
+        "resourceType": "Patient",
+        "id": "p001",
+        "name": [
+          {
+            "given": [
+              "Alice"
+            ],
+            "family": "Smith"
+          }
+        ],
+        "gender": "female",
+        "birthDate": "1990-05-15",
+        "address": [
+          {
+            "city": "Chicago",
+            "state": "IL"
+          }
+        ]
+      }
+    },
+    {
+      "resource": {
+        "resourceType": "Patient",
+        "id": "p002",
+        "name": [
+          {
+            "given": [
+              "Bob"
+            ],
+            "family": "Jones"
+          }
+        ],
+        "gender": "male",
+        "birthDate": "1975-08-22",
+        "address": [
+          {
+            "city": "Boston",
+            "state": "MA"
+          }
+        ]
+      }
+    },
+    {
+      "resource": {
+        "resourceType": "Patient",
+        "id": "p003",
+        "name": [
+          {
+            "given": [
+              "Carol"
+            ],
+            "family": "Davis"
+          }
+        ],
+        "gender": "female",
+        "birthDate": "1985-03-01",
+        "address": [
+          {
+            "city": "New York",
+            "state": "NY"
+          }
+        ]
+      }
+    },
+    {
+      "resource": {
+        "resourceType": "Observation",
+        "id": "obs001",
+        "status": "final",
+        "code": {
+          "coding": [
+            {
+              "code": "2339-0",
+              "display": "Glucose"
+            }
+          ],
+          "text": "Glucose"
+        },
+        "subject": {
+          "reference": "Patient/p001"
+        },
+        "effectiveDateTime": "2024-01-15",
+        "valueQuantity": {
+          "value": 95.2,
+          "unit": "mg/dL"
+        }
+      }
+    },
+    {
+      "resource": {
+        "resourceType": "Observation",
+        "id": "obs002",
+        "status": "final",
+        "code": {
+          "coding": [
+            {
+              "code": "2339-0",
+              "display": "Glucose"
+            }
+          ],
+          "text": "Glucose"
+        },
+        "subject": {
+          "reference": "Patient/p001"
+        },
+        "effectiveDateTime": "2024-06-10",
+        "valueQuantity": {
+          "value": 102.8,
+          "unit": "mg/dL"
+        }
+      }
+    },
+    {
+      "resource": {
+        "resourceType": "Observation",
+        "id": "obs003",
+        "status": "final",
+        "code": {
+          "coding": [
+            {
+              "code": "2085-9",
+              "display": "HDL Cholesterol"
+            }
+          ],
+          "text": "HDL Cholesterol"
+        },
+        "subject": {
+          "reference": "Patient/p001"
+        },
+        "effectiveDateTime": "2024-01-15",
+        "valueQuantity": {
+          "value": 58.0,
+          "unit": "mg/dL"
+        }
+      }
+    },
+    {
+      "resource": {
+        "resourceType": "Condition",
+        "id": "cond001",
+        "clinicalStatus": {
+          "coding": [
+            {
+              "code": "active"
+            }
+          ]
+        },
+        "code": {
+          "coding": [
+            {
+              "code": "44054006",
+              "display": "Diabetes mellitus type 2"
+            }
+          ]
+        },
+        "subject": {
+          "reference": "Patient/p001"
+        },
+        "onsetDateTime": "2020-03-10"
+      }
+    },
+    {
+      "resource": {
+        "resourceType": "Condition",
+        "id": "cond002",
+        "clinicalStatus": {
+          "coding": [
+            {
+              "code": "active"
+            }
+          ]
+        },
+        "code": {
+          "coding": [
+            {
+              "code": "38341003",
+              "display": "Hypertension"
+            }
+          ]
+        },
+        "subject": {
+          "reference": "Patient/p002"
+        },
+        "onsetDateTime": "2019-07-20"
+      }
+    },
+    {
+      "resource": {
+        "resourceType": "MedicationRequest",
+        "id": "med001",
+        "status": "active",
+        "intent": "order",
+        "medicationCodeableConcept": {
+          "text": "Metformin 500mg"
+        },
+        "subject": {
+          "reference": "Patient/p001"
+        },
+        "authoredOn": "2020-03-15"
+      }
+    }
+  ]
+}

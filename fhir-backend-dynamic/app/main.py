@@ -1,8 +1,7 @@
 # app/main.py - Updated to include startup system and configuration
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from app.routers import resources, health, servers, filters, metadata
-# , aggregate  # TEMPORARILY DISABLED
+from app.routers import resources, health, servers, filters, metadata, aggregate, file_source
 from app.core.logging import setup_logging
 from app.startup import initialize_backend, get_startup_status
 from app.config import config
@@ -84,18 +83,9 @@ app.include_router(health.router,     prefix="/api")
 app.include_router(resources.router,  prefix="/api") 
 app.include_router(servers.router,    prefix="/api")
 app.include_router(filters.router,    prefix="/api")  # Filter endpoints
-app.include_router(metadata.router,   prefix="/api")  # NEW: FHIR Metadata endpoints
-
-# Conditionally include aggregate router behind feature flag
-# TEMPORARILY DISABLED - causing issues
-# if config.aggregate_enabled:
-#     try:
-#         app.include_router(aggregate.router, prefix="/api")  # NEW: Aggregate dataset endpoints
-#         logging.info("🔗 Aggregate endpoints enabled successfully")
-#     except Exception as e:
-#         logging.error(f"❌ Failed to include aggregate router: {e}")
-#         import traceback
-#         traceback.print_exc()
+app.include_router(metadata.router,   prefix="/api")
+app.include_router(aggregate.router,  prefix="/api")
+app.include_router(file_source.router, prefix="/api")
 
 @app.get("/")
 async def home():
