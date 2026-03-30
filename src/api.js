@@ -1211,3 +1211,57 @@ export async function checkSpecificResources(resourceTypes) {
   }
 }
 
+
+// =============================================================================
+// FILE SOURCE API — local FHIR Bundle support
+// =============================================================================
+
+const FILE_API_BASE = CONFIG.api.baseUrl + '/api/sources/file';
+
+export async function getFilePatientsPage(sourceId, count = 50, offset = 0, search = '') {
+  const params = new URLSearchParams({ _count: count, _getpagesoffset: offset });
+  if (search) params.set('search', search);
+
+  try {
+    const response = await fetch(`${FILE_API_BASE}/${sourceId}/Patient?${params}`);
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    return await response.json();
+  } catch (error) {
+    console.error('Error fetching patients from file:', error);
+    return { success: false, data: [], pagination: {}, message: error.message };
+  }
+}
+
+export async function getFilePatient(sourceId, patientId) {
+  try {
+    const response = await fetch(`${FILE_API_BASE}/${sourceId}/Patient/${patientId}`);
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    return await response.json();
+  } catch (error) {
+    console.error('Error fetching patient from file:', error);
+    return { success: false, message: error.message };
+  }
+}
+
+export async function getFilePatientResources(sourceId, patientId, resourceType, count = 50, offset = 0) {
+  const params = new URLSearchParams({ _count: count, _getpagesoffset: offset });
+  try {
+    const response = await fetch(`${FILE_API_BASE}/${sourceId}/Patient/${patientId}/resources/${resourceType}?${params}`);
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    return await response.json();
+  } catch (error) {
+    console.error(`Error fetching ${resourceType} from file:`, error);
+    return { success: false, data: [], count: 0, pagination: {}, message: error.message };
+  }
+}
+
+export async function deleteFileSource(sourceId) {
+  try {
+    const response = await fetch(`${FILE_API_BASE}/${sourceId}`, { method: 'DELETE' });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    return await response.json();
+  } catch (error) {
+    console.error('Error deleting file source:', error);
+    return { success: false, message: error.message };
+  }
+}
