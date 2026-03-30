@@ -12,6 +12,7 @@ import DynamicFilterSidebar from "./DynamicFilterSidebar";
 import PatientTable from "./PatientTable";
 import PatientDetails from "./PatientDetails";
 import LazyPatientDetails from "./LazyPatientDetails";
+import FileUploadModal from "./FileUploadModal";
 
 import * as api from "./api";
 import { CONFIG } from "./config";
@@ -27,6 +28,8 @@ const DynamicResourceViewer = () => null;
 
 const MainPage = () => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [showUploadModal, setShowUploadModal] = useState(false);
+  const [fileSource, setFileSource] = useState(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [activeFilters, setActiveFilters] = useState({});
   const [loading, setLoading] = useState(false);
@@ -94,6 +97,28 @@ const MainPage = () => {
 
     return cleanedFilters;
   };
+
+  // Restore file source state on mount (survives page refresh)
+  useEffect(() => {
+    try {
+      const saved = sessionStorage.getItem('fhirFileSource');
+      if (saved) {
+        const src = JSON.parse(saved);
+        // Verify the source still exists on the backend before restoring
+        fetch(`http://localhost:8000/api/sources/file/${src.sourceId}/Patient?_count=1`)
+          .then(r => {
+            if (r.ok) {
+              setFileSource(src);
+            } else {
+              sessionStorage.removeItem('fhirFileSource');
+            }
+          })
+          .catch(() => sessionStorage.removeItem('fhirFileSource'));
+      }
+    } catch {
+      sessionStorage.removeItem('fhirFileSource');
+    }
+  }, []);
 
   // Restore navigation state on component mount
   useEffect(() => {
@@ -283,10 +308,57 @@ const MainPage = () => {
   // Filter data will be loaded on-demand when individual resource dropdowns are opened
   // This avoids blocking the sidebar open with heavy resource loading
 
+  const handleFileUploadSuccess = (uploadData) => {
+    const src = { sourceId: uploadData.source_id, filename: uploadData.filename, resourceCounts: uploadData.resource_counts };
+    setFileSource(src);
+    sessionStorage.setItem('fhirFileSource', JSON.stringify(src));
+    setShowUploadModal(false);
+    setActiveFilters({});
+    sessionStorage.removeItem("patientListState");
+    setTimeout(() => loadPatients(1), 100);
+  };
+
+  const handleClearFileSource = async () => {
+    if (fileSource) {
+      await api.deleteFileSource(fileSource.sourceId);
+      setFileSource(null);
+      sessionStorage.removeItem('fhirFileSource');
+      loadPatients(1);
+    }
+  };
+
   const loadPatients = async (page = 1) => {
-    // Prevent concurrent loading calls
     if (loading) {
       console.log("⏸️ Patient loading already in progress, skipping...");
+      return;
+    }
+
+    if (fileSource) {
+      try {
+        setLoading(true);
+        setError(null);
+        const offset = (page - 1) * pagination.per_page;
+        const response = await api.getFilePatientsPage(fileSource.sourceId, pagination.per_page, offset, searchTerm.trim());
+        if (response.success) {
+          const transformed = (response.data || []).map(transformPatientForTable);
+          setPatients(transformed);
+          setOriginalPatients(transformed);
+          setPagination((prev) => ({
+            ...prev,
+            page,
+            total: response.pagination.total || 0,
+            has_next: response.pagination.has_next || false,
+            has_prev: response.pagination.has_prev || false,
+          }));
+        } else {
+          setError(response.message || "Failed to load patients from file");
+        }
+      } catch (err) {
+        setError(err.message);
+      } finally {
+        setLoading(false);
+        setIsPageChanging(false);
+      }
       return;
     }
 
@@ -988,6 +1060,13 @@ const MainPage = () => {
 
   return (
     <div style={{ minHeight: "100vh", backgroundColor: "#f5f5f5" }}>
+      {showUploadModal && (
+        <FileUploadModal
+          onClose={() => setShowUploadModal(false)}
+          onUploadSuccess={handleFileUploadSuccess}
+        />
+      )}
+
       <Header
         onSidebarToggle={handleSidebarToggle}
         onSearchChange={handleSearchChange}
@@ -996,6 +1075,49 @@ const MainPage = () => {
         searchTerm={searchTerm}
         currentDateTime={getCurrentDateTime()}
       />
+
+      {fileSource ? (
+        <div style={{
+          backgroundColor: '#0d6efd', color: 'white',
+          padding: '8px 20px', display: 'flex', alignItems: 'center',
+          justifyContent: 'space-between', fontSize: '0.875rem',
+        }}>
+          <span>
+            📂 Viewing local file: <strong>{fileSource.filename}</strong>
+            {fileSource.resourceCounts?.Patient !== undefined && (
+              <span style={{ marginLeft: 8, opacity: 0.85 }}>
+                ({fileSource.resourceCounts.Patient || 0} patients, {Object.values(fileSource.resourceCounts).reduce((a, b) => a + b, 0)} total resources)
+              </span>
+            )}
+          </span>
+          <button
+            onClick={handleClearFileSource}
+            style={{
+              background: 'rgba(255,255,255,0.2)', border: '1px solid rgba(255,255,255,0.4)',
+              color: 'white', padding: '3px 10px', borderRadius: '4px',
+              cursor: 'pointer', fontSize: '0.8rem',
+            }}
+          >
+            ✕ Clear file
+          </button>
+        </div>
+      ) : (
+        <div style={{
+          backgroundColor: '#f8f9fa', borderBottom: '1px solid #dee2e6',
+          padding: '6px 20px', display: 'flex', justifyContent: 'flex-end',
+        }}>
+          <button
+            onClick={() => setShowUploadModal(true)}
+            style={{
+              background: 'white', border: '1px solid #0d6efd', color: '#0d6efd',
+              padding: '4px 14px', borderRadius: '4px', cursor: 'pointer',
+              fontSize: '0.82rem', fontWeight: '500',
+            }}
+          >
+            📂 Upload FHIR Bundle
+          </button>
+        </div>
+      )}
 
       <div className="app-layout">
         {viewMode === "patients" && (
